@@ -28,7 +28,7 @@ export default function InventoryPage() {
   const [saleItems,setSaleItems] = useState([{materialCategory:"Natural Bottles",materialVariant:"Green",quantityKg:"",ratePerKg:""}]);
 
   const [message,setMessage] = useState("");
-  const emptyPurchase = { materialId:"", materialName:"", supplierId:"", purchaseType:"NORMAL", quantityKg:"", ratePerKg:"", paidAmount:"", paidBy:"", borrowingId:"", lenderId:"", purchaseDate:new Date().toISOString().slice(0,10), notes:"",  };
+  const emptyPurchase = { materialId:"", materialName:"", materialVariant:"Green", supplierId:"", purchaseType:"NORMAL", quantityKg:"", ratePerKg:"", paidAmount:"", paidBy:"", borrowingId:"", lenderId:"", purchaseDate:new Date().toISOString().slice(0,10), notes:"",  };
   const [purchase,setPurchase] = useState(emptyPurchase);
   const [editingPurchase,setEditingPurchase] = useState<number|null>(null);
   const [borrowing,setBorrowing] = useState({lenderId:"",amount:"",purpose:"",notes:""});
@@ -158,10 +158,24 @@ export default function InventoryPage() {
     if(ok) setRepayForm(null);
   }
 
+  function purchaseCategoryAndVariant(materialName:string, materialVariant?:string) {
+    if (materialName === "Red Bottles" || materialVariant === "Red") {
+      return { materialName: "Red Bottles", materialVariant: "Red" };
+    }
+    if (materialName.startsWith("Natural Bottles - ")) {
+      return { materialName: "Natural Bottles", materialVariant: materialName.slice("Natural Bottles - ".length) || "Green" };
+    }
+    if (materialName === "Natural Bottles") {
+      return { materialName: "Natural Bottles", materialVariant: materialVariant || "Green" };
+    }
+    return { materialName, materialVariant: materialVariant || "" };
+  }
+
   async function addPurchase() {
     const m=materials.find((x:Material)=>String(x.id)===purchase.materialId);
     const ok=await post("addPurchase",{
       mode, materialId:m?.id, materialName:purchase.materialName||m?.name_en,
+      materialVariant:purchase.materialVariant||undefined,
       supplierId:purchase.supplierId?Number(purchase.supplierId):undefined,
       purchaseType:purchase.purchaseType, quantityKg:Number(purchase.quantityKg),
       ratePerKg:Number(purchase.ratePerKg), paidAmount:purchase.paidAmount===""?undefined:Number(purchase.paidAmount), paidBy:purchase.paidBy||undefined,
@@ -176,6 +190,7 @@ export default function InventoryPage() {
     const m=materials.find((x:Material)=>String(x.id)===purchase.materialId);
     const ok=await post("updatePurchase",{
       purchaseId:editingPurchase, mode, materialId:m?.id, materialName:purchase.materialName||m?.name_en,
+      materialVariant:purchase.materialVariant||undefined,
       supplierId:purchase.supplierId?Number(purchase.supplierId):undefined, purchaseType:purchase.purchaseType,
       quantityKg:Number(purchase.quantityKg), ratePerKg:Number(purchase.ratePerKg), paidBy:purchase.paidBy||undefined, purchaseDate:purchase.purchaseDate, notes:purchase.notes
     });
@@ -184,7 +199,8 @@ export default function InventoryPage() {
 
   function startEditPurchase(p:Purchase) {
     setEditingPurchase(p.id);
-    setPurchase({materialId:"",materialName:p.material_name,supplierId:p.supplierName ? String((data?.suppliers||[]).find((s:Supplier)=>s.name===p.supplierName)?.id||"") : "",purchaseType:p.purchase_type,quantityKg:String(p.quantity_kg),ratePerKg:String(p.rate_per_kg),paidAmount:String(p.paid_amount),paidBy:p.paid_by||"",borrowingId:"",lenderId:"",purchaseDate:p.purchase_date,notes:""});
+    const parsed = purchaseCategoryAndVariant(p.material_name, (p as Purchase & {material_variant?:string}).material_variant);
+    setPurchase({materialId:"",materialName:parsed.materialName,materialVariant:parsed.materialVariant || "Green",supplierId:p.supplierName ? String((data?.suppliers||[]).find((s:Supplier)=>s.name===p.supplierName)?.id||"") : "",purchaseType:p.purchase_type,quantityKg:String(p.quantity_kg),ratePerKg:String(p.rate_per_kg),paidAmount:String(p.paid_amount),paidBy:p.paid_by||"",borrowingId:"",lenderId:"",purchaseDate:p.purchase_date,notes:""});
     window.scrollTo({top:0,behavior:"smooth"});
   }
 
@@ -226,10 +242,18 @@ export default function InventoryPage() {
           <select className="ad-input" value={purchase.supplierId} onChange={e=>setPurchase({...purchase,supplierId:e.target.value})}>
             <option value="">Select vendor</option>{(data.suppliers||[]).map((s:Supplier)=><option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
-          <select className="ad-input" value={purchase.materialName} onChange={e=>setPurchase({...purchase,materialName:e.target.value})}>
+          <select className="ad-input" value={purchase.materialName} onChange={e=>{
+            const materialName=e.target.value;
+            setPurchase({...purchase,materialName,materialVariant:materialName==="Red Bottles"?"Red":materialName==="Natural Bottles"?(purchase.materialVariant==="Red"?"Green":purchase.materialVariant||"Green"):""});
+          }}>
             <option value="">Material</option>
             <option value="Natural Bottles">Natural Bottles</option>
             <option value="Red Bottles">Red Bottles</option>
+          </select>
+          <select className="ad-input" value={purchase.materialVariant} onChange={e=>setPurchase({...purchase,materialVariant:e.target.value})} disabled={!purchase.materialName}>
+            {purchase.materialName==="Red Bottles"
+              ? <option value="Red">Red</option>
+              : <><option value="Green">Green</option><option value="White">White</option><option value="White Milk">White Milk</option></>}
           </select>
           <input className="ad-input" type="date" value={purchase.purchaseDate} onChange={e=>setPurchase({...purchase,purchaseDate:e.target.value})}/>
           <input className="ad-input" type="number" placeholder="Quantity (kg)" value={purchase.quantityKg} onChange={e=>setPurchase({...purchase,quantityKg:e.target.value})}/>

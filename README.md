@@ -145,6 +145,8 @@ Oracle Cloud free ARM VM can work if you are comfortable with setup. Still use p
 - Do **not** delete or remount the Railway volume when redeploying.
 - Do **not** run seed against the production volume.
 
+**Stock naming:** Purchases of Natural/Red bottles must include a colour variant so inventory keys match sales (`Natural Bottles - Green`, `Natural Bottles - White`, `Natural Bottles - White Milk`, `Red Bottles`). If an older purchase was saved as plain `Natural Bottles`, use **Inventory → adjustment** to move kg into the correct variant name before selling — do not delete historical purchase rows.
+
 ### Minimal server setup (pm2)
 
 ```bash

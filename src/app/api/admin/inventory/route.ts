@@ -34,6 +34,28 @@ function saleMaterialName(materialCategory: string, materialVariant: string) {
   return materialVariant === "Red" ? "Red Bottles" : "Natural Bottles - " + materialVariant;
 }
 
+/** Normalize purchase category + variant into the same stock key sales/processing use. */
+function purchaseStockName(materialName: string, materialVariant: string) {
+  const name = materialName.trim();
+  const variant = materialVariant.trim();
+  if (name === "Red Bottles" || variant === "Red") {
+    if (variant && variant !== "Red") {
+      throw new Error("Red Bottles must use the Red variant");
+    }
+    return "Red Bottles";
+  }
+  if (name === "Natural Bottles" || name.startsWith("Natural Bottles - ")) {
+    const fromName = name.startsWith("Natural Bottles - ") ? name.slice("Natural Bottles - ".length) : "";
+    const resolved = variant || fromName;
+    if (!["Green", "White", "White Milk"].includes(resolved)) {
+      throw new Error("Natural Bottles require Green, White, or White Milk variant");
+    }
+    return "Natural Bottles - " + resolved;
+  }
+  // Legacy free-text materials keep their purchased name as the stock key.
+  return name;
+}
+
 function getAvailableStock(mode: string, materialName: string, date: string, excludeSaleId?: number) {
   const row = excludeSaleId === undefined
     ? sqlite.prepare("SELECT COALESCE(SUM(quantity_kg),0) as kg FROM inventory_transactions WHERE mode=? AND transaction_date<=? AND material_name=?").get(mode,date,materialName) as any
@@ -311,6 +333,7 @@ export async function POST(req: NextRequest) {
         mode: modeSchema,
         materialId: z.number().int().positive().optional(),
         materialName: z.string().trim().min(1),
+        materialVariant: z.string().trim().optional().default(""),
         supplierId: z.number().int().positive().optional(),
         purchaseType: z.enum(["NORMAL", "SUPPLIER_CREDIT", "BORROWED_FUND"]),
         quantityKg: z.number().positive(),
@@ -333,6 +356,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Borrowing account is required for borrowed-fund purchase" }, { status: 400 });
       }
 
+      let stockName: string;
+      try {
+        stockName = purchaseStockName(s.materialName, s.materialVariant);
+      } catch (error) {
+        return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid material variant" }, { status: 400 });
+      }
+      const variant = stockName === "Red Bottles" ? "Red" : stockName.startsWith("Natural Bottles - ") ? stockName.slice("Natural Bottles - ".length) : s.materialVariant;
+
       const total = Math.round(s.quantityKg * s.ratePerKg * 100) / 100;
       let cashPaid = s.paidAmount ?? 0;
       if (cashPaid > total) cashPaid = total;
@@ -347,9 +378,9 @@ export async function POST(req: NextRequest) {
          total_amount, paid_amount, credit_amount, lender_id, borrowing_id, purchase_date, notes, paid_by, transport_charges, weight_charges, labour_charges, material_variant, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        s.mode, s.materialId ?? null, s.materialName, s.supplierId ?? null, s.purchaseType,
+        s.mode, s.materialId ?? null, stockName, s.supplierId ?? null, s.purchaseType,
         s.quantityKg, s.ratePerKg, total, paid, credit, s.lenderId ?? null, s.borrowingId ?? null,
-        s.purchaseDate, s.notes, s.paidBy ?? "", 0, 0, 0, "", nowIso(), nowIso()
+        s.purchaseDate, s.notes, s.paidBy ?? "", 0, 0, 0, variant, nowIso(), nowIso()
       );
       const purchaseId = Number(r.lastInsertRowid);
       if(cashPaid>0) sqlite.prepare(`INSERT INTO vendor_payments (mode,supplier_id,purchase_id,payment_type,amount,payment_date,payment_mode,notes,paid_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`).run(s.mode,s.supplierId,purchaseId,"PURCHASE",cashPaid,s.purchaseDate,"Cash",s.notes,s.paidBy ?? "",nowIso());
@@ -359,9 +390,9 @@ export async function POST(req: NextRequest) {
         INSERT INTO inventory_transactions
         (mode, material_id, material_name, transaction_type, quantity_kg, amount, purchase_id, transaction_date, notes, created_at)
         VALUES (?, ?, ?, 'PURCHASE', ?, ?, ?, ?, ?, ?)
-      `).run(s.mode, s.materialId ?? null, s.materialName, s.quantityKg, total, purchaseId, s.purchaseDate, s.notes, nowIso());
+      `).run(s.mode, s.materialId ?? null, stockName, s.quantityKg, total, purchaseId, s.purchaseDate, s.notes, nowIso());
 
-      return json({ ok: true, id: purchaseId, total, paid, credit });
+      return json({ ok: true, id: purchaseId, total, paid, credit, materialName: stockName });
     }
 
     if (body.action === "updatePurchase") {
@@ -370,6 +401,7 @@ export async function POST(req: NextRequest) {
         mode: modeSchema,
         materialId: z.number().int().positive().optional(),
         materialName: z.string().trim().min(1),
+        materialVariant: z.string().trim().optional().default(""),
         supplierId: z.number().int().positive(),
         purchaseType: z.enum(["NORMAL", "SUPPLIER_CREDIT", "BORROWED_FUND"]),
         quantityKg: z.number().positive(),
@@ -380,20 +412,27 @@ export async function POST(req: NextRequest) {
       }).parse(body);
       const existing = sqlite.prepare("SELECT id, paid_amount, material_id, material_name as existing_material_name, supplier_id as existing_supplier_id FROM purchases WHERE id=? AND mode=?").get(s.purchaseId, s.mode) as {id:number;paid_amount:number;material_id:number|null;existing_material_name:string;existing_supplier_id:number|null} | undefined;
       if (!existing) return NextResponse.json({ error: "Purchase not found" }, { status: 404 });
+      let stockName: string;
+      try {
+        stockName = purchaseStockName(s.materialName, s.materialVariant);
+      } catch (error) {
+        return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid material variant" }, { status: 400 });
+      }
+      const variant = stockName === "Red Bottles" ? "Red" : stockName.startsWith("Natural Bottles - ") ? stockName.slice("Natural Bottles - ".length) : s.materialVariant;
       const total = Math.round(s.quantityKg * s.ratePerKg * 100) / 100;
       if (existing.paid_amount > total + 0.005) return NextResponse.json({ error: "Purchase total cannot be less than amount already paid" }, { status: 400 });
       const credit = Math.round((total - existing.paid_amount) * 100) / 100;
       if (!s.supplierId) return NextResponse.json({ error: "Vendor is required for every purchase" }, { status: 400 });
       const materialId = s.materialId ?? existing.material_id ?? null;
-      sqlite.prepare(`UPDATE purchases SET material_id=?, material_name=?, supplier_id=?, purchase_type=?, quantity_kg=?, rate_per_kg=?, total_amount=?, credit_amount=?, purchase_date=?, paid_by=?, notes=?, updated_at=? WHERE id=? AND mode=?`)
-        .run(materialId, s.materialName, s.supplierId, s.purchaseType, s.quantityKg, s.ratePerKg, total, credit, s.purchaseDate, s.paidBy ?? "", s.notes, nowIso(), s.purchaseId, s.mode);
+      sqlite.prepare(`UPDATE purchases SET material_id=?, material_name=?, supplier_id=?, purchase_type=?, quantity_kg=?, rate_per_kg=?, total_amount=?, credit_amount=?, purchase_date=?, paid_by=?, notes=?, material_variant=?, updated_at=? WHERE id=? AND mode=?`)
+        .run(materialId, stockName, s.supplierId, s.purchaseType, s.quantityKg, s.ratePerKg, total, credit, s.purchaseDate, s.paidBy ?? "", s.notes, variant, nowIso(), s.purchaseId, s.mode);
       sqlite.prepare("UPDATE inventory_transactions SET material_id=?, material_name=?, quantity_kg=?, amount=?, transaction_date=?, notes=? WHERE purchase_id=? AND transaction_type='PURCHASE'")
-        .run(materialId, s.materialName, s.quantityKg, total, s.purchaseDate, s.notes, s.purchaseId);
+        .run(materialId, stockName, s.quantityKg, total, s.purchaseDate, s.notes, s.purchaseId);
       if (s.supplierId !== existing.existing_supplier_id) {
         sqlite.prepare("UPDATE vendor_payments SET supplier_id=? WHERE purchase_id=?").run(s.supplierId, s.purchaseId);
       }
-      assertNoNegativeStock(s.mode, [existing.existing_material_name, s.materialName]);
-      return json({ ok: true, total, paid: existing.paid_amount, credit });
+      assertNoNegativeStock(s.mode, [existing.existing_material_name, stockName]);
+      return json({ ok: true, total, paid: existing.paid_amount, credit, materialName: stockName });
     }
 
     if (body.action === "payVendor") {
