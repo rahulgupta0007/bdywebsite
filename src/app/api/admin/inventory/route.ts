@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/db";
 import { listMaterials, nowIso, todayStr } from "@/lib/rates";
+import { ACCOUNT_PERSONS, optionalAccountPersonSchema } from "@/lib/account-persons";
 
 export const dynamic = "force-dynamic";
 
@@ -206,17 +207,18 @@ export async function GET() {
   const openingBalance = { PET: Number((sqlite.prepare("SELECT COALESCE(opening_balance,0) as n FROM company_balances WHERE mode='PET'").get() as any)?.n || 0), PLASTIC: Number((sqlite.prepare("SELECT COALESCE(opening_balance,0) as n FROM company_balances WHERE mode='PLASTIC'").get() as any)?.n || 0) };
 
   const personAccountTotals: Record<string, Record<string, {
-    received:number; purchasesPaid:number; expensesPaid:number; processingPaid:number; saleProcessingPaid:number; paid:number; balance:number;
+    received:number; purchasesPaid:number; expensesPaid:number; processingPaid:number; saleProcessingPaid:number; labourPaid:number; paid:number; balance:number;
   }>> = { PET: {}, PLASTIC: {} };
   for (const mode of ["PET","PLASTIC"]) {
-    for (const person of ["Rahul","Nitin","Devesh"]) {
+    for (const person of ACCOUNT_PERSONS) {
       const received = Number((sqlite.prepare("SELECT COALESCE(SUM(amount),0) as n FROM sale_payments WHERE mode=? AND received_by=?").get(mode,person) as any)?.n || 0);
       const purchasesPaid = Number((sqlite.prepare("SELECT COALESCE(SUM(vp.amount),0) as n FROM vendor_payments vp LEFT JOIN purchases p ON p.id=vp.purchase_id WHERE vp.mode=? AND COALESCE(NULLIF(vp.paid_by,''), p.paid_by, '')=? AND vp.payment_type<>'ADVANCE' AND COALESCE(vp.payment_mode,'')<>'Advance'").get(mode,person) as any)?.n || 0);
       const expensesPaid = Number((sqlite.prepare("SELECT COALESCE(SUM(amount),0) as n FROM other_expenses WHERE mode=? AND paid_by=?").get(mode,person) as any)?.n || 0);
       const processingPaid = Number((sqlite.prepare("SELECT COALESCE(SUM(amount),0) as n FROM processing_expenses WHERE mode=? AND paid_by=?").get(mode,person) as any)?.n || 0);
       const saleProcessingPaid = Number((sqlite.prepare("SELECT COALESCE(SUM(labour_cost + loading_cost),0) as n FROM sale_processing_costs WHERE mode=? AND paid_by=?").get(mode,person) as any)?.n || 0);
-      const paid = purchasesPaid + expensesPaid + processingPaid + saleProcessingPaid;
-      personAccountTotals[mode][person] = { received, purchasesPaid, expensesPaid, processingPaid, saleProcessingPaid, paid, balance: received - paid };
+      const labourPaid = Number((sqlite.prepare("SELECT COALESCE(SUM(amount),0) as n FROM processing_manual_labour WHERE mode=? AND paid_by=?").get(mode,person) as any)?.n || 0);
+      const paid = purchasesPaid + expensesPaid + processingPaid + saleProcessingPaid + labourPaid;
+      personAccountTotals[mode][person] = { received, purchasesPaid, expensesPaid, processingPaid, saleProcessingPaid, labourPaid, paid, balance: received - paid };
     }
   }
 
@@ -275,7 +277,7 @@ export async function POST(req: NextRequest) {
         billingMonth: z.string().optional(),
         billingStartDate: z.union([dateSchema, z.literal("")]).optional(),
         billingEndDate: z.union([dateSchema, z.literal("")]).optional(),
-        paidBy: z.enum(["Rahul","Devesh","Nitin"]).optional()
+        paidBy: optionalAccountPersonSchema
       }).parse(body);
       const billingMonth = x.expenseType === "Electricity" ? (x.billingMonth ?? "") : "";
       const billingStartDate = x.expenseType === "Electricity" ? (x.billingStartDate ?? "") : "";
@@ -339,7 +341,7 @@ export async function POST(req: NextRequest) {
         quantityKg: z.number().positive(),
         ratePerKg: z.number().nonnegative(),
         paidAmount: z.number().nonnegative().optional(),
-        paidBy: z.enum(["Rahul","Devesh","Nitin"]).optional(),
+        paidBy: optionalAccountPersonSchema,
         lenderId: z.number().int().positive().optional(),
         borrowingId: z.number().int().positive().optional(),
         purchaseDate: dateSchema.optional().default(todayStr()),
@@ -407,7 +409,7 @@ export async function POST(req: NextRequest) {
         quantityKg: z.number().positive(),
         ratePerKg: z.number().nonnegative(),
         purchaseDate: dateSchema,
-        paidBy: z.enum(["Rahul","Devesh","Nitin"]).optional(),
+        paidBy: optionalAccountPersonSchema,
         notes: z.string().trim().optional().default(""),
       }).parse(body);
       const existing = sqlite.prepare("SELECT id, paid_amount, material_id, material_name as existing_material_name, supplier_id as existing_supplier_id FROM purchases WHERE id=? AND mode=?").get(s.purchaseId, s.mode) as {id:number;paid_amount:number;material_id:number|null;existing_material_name:string;existing_supplier_id:number|null} | undefined;
@@ -436,7 +438,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === "payVendor") {
-      const s=z.object({mode:modeSchema,supplierId:z.number().int().positive(),amount:z.number().positive(),paymentDate:dateSchema.optional().default(todayStr()),paymentMode:z.string().trim().min(1).default("Cash"),paidBy:z.enum(["Rahul","Devesh","Nitin"]).optional(),notes:z.string().trim().optional().default("")}).parse(body);
+      const s=z.object({mode:modeSchema,supplierId:z.number().int().positive(),amount:z.number().positive(),paymentDate:dateSchema.optional().default(todayStr()),paymentMode:z.string().trim().min(1).default("Cash"),paidBy:optionalAccountPersonSchema,notes:z.string().trim().optional().default("")}).parse(body);
       const purchases=sqlite.prepare("SELECT id,credit_amount FROM purchases WHERE mode=? AND supplier_id=? AND credit_amount>0 ORDER BY purchase_date ASC,id ASC").all(s.mode,s.supplierId) as Array<{id:number;credit_amount:number}>;
       if(s.amount > purchases.reduce((n,p)=>n+p.credit_amount,0)+0.005) return NextResponse.json({error:"Payment exceeds vendor outstanding balance"},{status:400});
       let rem = s.amount;
@@ -454,7 +456,7 @@ export async function POST(req: NextRequest) {
       const s = z.object({
         purchaseId: z.number().int().positive(),
         amount: z.number().positive(),
-        paidBy: z.enum(["Rahul","Devesh","Nitin"]).optional(),
+        paidBy: optionalAccountPersonSchema,
       }).parse(body);
       const p = sqlite.prepare("SELECT credit_amount, mode, supplier_id FROM purchases WHERE id=?").get(s.purchaseId) as { credit_amount:number; mode:string; supplier_id:number } | undefined;
       if (!p) return NextResponse.json({ error: "Purchase not found" }, { status: 404 });
@@ -493,9 +495,10 @@ export async function POST(req: NextRequest) {
         taskType: z.enum(["Cap Removal","Sorting","Other"]),
         amountPerWorker: z.number().positive(),
         paymentDate: dateSchema.optional(),
-        paidBy: z.string().trim().max(100).optional().default(""),
+        paidBy: optionalAccountPersonSchema,
         notes: z.string().trim().max(500).optional().default("")
       }).parse(body);
+      if (!s.paidBy) return NextResponse.json({error:"Payment done by is required"},{status:400});
       const ids=[...new Set(s.workerIds)];
       const placeholders=ids.map(()=>"?").join(",");
       const workers=sqlite.prepare("SELECT id,name FROM manual_labour_workers WHERE active=1 AND id IN ("+placeholders+")");
@@ -587,7 +590,7 @@ export async function POST(req: NextRequest) {
         description: z.string().trim().optional().default(""),
         amount: z.number().positive(),
         expenseDate: dateSchema.optional().default(todayStr()),
-        paidBy: z.enum(["Rahul","Devesh","Nitin"]).optional()
+        paidBy: optionalAccountPersonSchema
       }).parse(body);
       sqlite.prepare("INSERT INTO processing_expenses (mode,expense_type,description,amount,expense_date,paid_by,created_at) VALUES (?,?,?,?,?,?,?)").run(s.mode,s.expenseType,s.description,s.amount,s.expenseDate,s.paidBy??"",nowIso());
       return json({ok:true});
@@ -604,7 +607,7 @@ export async function POST(req: NextRequest) {
           ratePerKg: z.number().nonnegative()
         })).min(1),
         receivedAmount: z.number().nonnegative().optional(),
-        saleDate: dateSchema.optional().default(todayStr()), receivedBy: z.enum(["Rahul","Devesh","Nitin"]).optional(),
+        saleDate: dateSchema.optional().default(todayStr()), receivedBy: optionalAccountPersonSchema,
         paymentMode: z.string().trim().min(1).optional().default("Cash"),
         loadingCharges: z.number().nonnegative().optional().default(0),
         notes: z.string().trim().optional().default("")
@@ -671,7 +674,7 @@ export async function POST(req: NextRequest) {
         })).min(1),
         saleDate: dateSchema,
         loadingCharges: z.number().nonnegative().default(0),
-        receivedBy: z.enum(["Rahul","Devesh","Nitin"]).optional(),
+        receivedBy: optionalAccountPersonSchema,
         paymentMode: z.string().trim().min(1).optional(),
         notes: z.string().trim().optional().default("")
       }).parse(body);
@@ -734,7 +737,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === "receiveSalePayment") {
-      const s = z.object({mode:modeSchema,saleId:z.number().int().positive(),amount:z.number().positive(),paymentDate:dateSchema.optional().default(todayStr()),paymentMode:z.string().trim().min(1).default("Cash"),receivedBy:z.enum(["Rahul","Devesh","Nitin"]).optional(),notes:z.string().trim().optional().default("")}).parse(body);
+      const s = z.object({mode:modeSchema,saleId:z.number().int().positive(),amount:z.number().positive(),paymentDate:dateSchema.optional().default(todayStr()),paymentMode:z.string().trim().min(1).default("Cash"),receivedBy:optionalAccountPersonSchema,notes:z.string().trim().optional().default("")}).parse(body);
       const sale = sqlite.prepare("SELECT credit_amount FROM sales WHERE id=? AND mode=?").get(s.saleId,s.mode) as any;
       if (!sale) return NextResponse.json({error:"Sale not found"},{status:404});
       if (s.amount > Number(sale.credit_amount) + 0.005) return NextResponse.json({error:"Payment exceeds pending amount"},{status:400});

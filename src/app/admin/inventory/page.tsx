@@ -3,7 +3,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AdminShell } from "@/components/admin-shell";
-
+import { PersonSelect } from "@/components/person-select";
+import { isAccountPerson } from "@/lib/account-persons";
 import { useBusinessMode, type BusinessMode } from "@/components/business-mode-provider";
 
 type Mode = BusinessMode;
@@ -36,7 +37,6 @@ export default function InventoryPage() {
   const [creditPay,setCreditPay] = useState<{purchaseId:number; amount:string; paidBy:string} | null>(null);
   const [salePay,setSalePay] = useState<{saleId:number; amount:string; receivedBy:string; paymentMode:string} | null>(null);
   const [repayForm,setRepayForm] = useState<{borrowingId:number; amount:string} | null>(null);
-  const PAYERS = ["Rahul","Devesh","Nitin"] as const;
 
   async function load() {
     const r=await fetch("/api/admin/inventory");
@@ -117,8 +117,8 @@ export default function InventoryPage() {
     if(!salePay) return;
     const amount=Number(salePay.amount);
     if(!(amount>0)) { setMessage("Enter a valid payment amount"); return; }
-    if(salePay.receivedBy && !PAYERS.includes(salePay.receivedBy as typeof PAYERS[number])) {
-      setMessage("Invalid payer"); return;
+    if(salePay.receivedBy && !isAccountPerson(salePay.receivedBy)) {
+      setMessage("Invalid payment person"); return;
     }
     const ok=await post("receiveSalePayment",{
       mode, saleId:salePay.saleId, amount,
@@ -137,8 +137,8 @@ export default function InventoryPage() {
     if(!creditPay) return;
     const amount=Number(creditPay.amount);
     if(!(amount>0)) { setMessage("Enter a valid payment amount"); return; }
-    if(creditPay.paidBy && !PAYERS.includes(creditPay.paidBy as typeof PAYERS[number])) {
-      setMessage("Invalid payer"); return;
+    if(creditPay.paidBy && !isAccountPerson(creditPay.paidBy)) {
+      setMessage("Invalid payment person"); return;
     }
     const ok=await post("paySupplierCredit",{
       purchaseId:creditPay.purchaseId, amount, paidBy:creditPay.paidBy||undefined,
@@ -258,7 +258,7 @@ export default function InventoryPage() {
           <input className="ad-input" type="date" value={purchase.purchaseDate} onChange={e=>setPurchase({...purchase,purchaseDate:e.target.value})}/>
           <input className="ad-input" type="number" placeholder="Quantity (kg)" value={purchase.quantityKg} onChange={e=>setPurchase({...purchase,quantityKg:e.target.value})}/>
           <input className="ad-input" type="number" placeholder="Rate / kg" value={purchase.ratePerKg} onChange={e=>setPurchase({...purchase,ratePerKg:e.target.value})}/>
-          <span className="ad-input flex items-center text-sm">Total: ₹{((Number(purchase.quantityKg)||0)*(Number(purchase.ratePerKg)||0)).toFixed(2)}</span><input className="ad-input" type="number" min="0" placeholder="Paid to vendor" value={purchase.paidAmount} onChange={e=>setPurchase({...purchase,paidAmount:e.target.value})}/><select className="ad-input" value={purchase.paidBy} onChange={e=>setPurchase({...purchase,paidBy:e.target.value})}><option value="">Payment done by</option><option>Rahul</option><option>Devesh</option><option>Nitin</option></select>
+          <span className="ad-input flex items-center text-sm">Total: ₹{((Number(purchase.quantityKg)||0)*(Number(purchase.ratePerKg)||0)).toFixed(2)}</span><input className="ad-input" type="number" min="0" placeholder="Paid to vendor" value={purchase.paidAmount} onChange={e=>setPurchase({...purchase,paidAmount:e.target.value})}/><PersonSelect value={purchase.paidBy} onChange={(v)=>setPurchase({...purchase,paidBy:v})} />
           {purchase.purchaseType==="BORROWED_FUND" && <select className="ad-input" value={purchase.borrowingId} onChange={e=>setPurchase({...purchase,borrowingId:e.target.value})}><option value="">Select borrowing</option>{openBorrowings.map((b:Borrowing)=><option key={b.id} value={b.id}>#{b.id} {b.lenderName} — ₹{b.outstanding_amount}</option>)}</select>}
           <input className="ad-input md:col-span-2" placeholder="Notes" value={purchase.notes} onChange={e=>setPurchase({...purchase,notes:e.target.value})}/>
           
@@ -273,9 +273,7 @@ export default function InventoryPage() {
         <h3 className="mb-3 text-sm font-semibold">Pay supplier credit — purchase #{creditPay.purchaseId}</h3>
         <div className="grid gap-2 md:grid-cols-4">
           <input className="ad-input" type="number" min="0" placeholder="Payment amount" value={creditPay.amount} onChange={e=>setCreditPay({...creditPay,amount:e.target.value})}/>
-          <select className="ad-input" value={creditPay.paidBy} onChange={e=>setCreditPay({...creditPay,paidBy:e.target.value})}>
-            <option value="">Payment done by</option>{PAYERS.map(p=><option key={p}>{p}</option>)}
-          </select>
+          <PersonSelect value={creditPay.paidBy} onChange={(v)=>setCreditPay({...creditPay,paidBy:v})} />
           <button className="ad-btn ad-btn-primary" onClick={submitCreditPayment}>Save credit payment</button>
           <button className="ad-btn ad-btn-ghost" onClick={()=>setCreditPay(null)}>Cancel</button>
         </div>
@@ -322,7 +320,7 @@ export default function InventoryPage() {
           <input className="ad-input" type="number" min="0" placeholder="Loading Charges" value={sale.loadingCharges||""} onChange={e=>setSale({...sale,loadingCharges:e.target.value})}/>
           <span className="ad-input flex items-center font-semibold">Final Amount: ₹{saleFinalAmount.toFixed(2)}</span>
           <input className="ad-input" type="number" min="0" max={saleFinalAmount} disabled={editingSale!==null} placeholder={editingSale?"Received payment (history)":"Total received payment"} value={sale.receivedAmount} onChange={e=>setSale({...sale,receivedAmount:e.target.value})}/>
-          <select className="ad-input" value={sale.receivedBy} onChange={e=>setSale({...sale,receivedBy:e.target.value})}><option value="">Received by</option><option>Rahul</option><option>Devesh</option><option>Nitin</option></select>
+          <PersonSelect value={sale.receivedBy} onChange={(v)=>setSale({...sale,receivedBy:v})} label="Received by" />
           <select className="ad-input" value={sale.paymentMode} onChange={e=>setSale({...sale,paymentMode:e.target.value})}><option>Cash</option><option>UPI</option><option>Bank Transfer</option><option>Cheque</option></select>
           <input className="ad-input md:col-span-2" placeholder="Notes" value={sale.notes} onChange={e=>setSale({...sale,notes:e.target.value})}/>
           <button className="ad-btn ad-btn-primary" onClick={editingSale ? editSale : addSale}>{editingSale ? "Update Sale" : "Save Full Truck Sale"}</button>{editingSale&&<button className="ad-btn ad-btn-ghost" onClick={resetSaleForm}>Cancel</button>}
@@ -333,9 +331,7 @@ export default function InventoryPage() {
         <h3 className="mb-3 text-sm font-semibold">Receive sale payment — sale #{salePay.saleId}</h3>
         <div className="grid gap-2 md:grid-cols-5">
           <input className="ad-input" type="number" min="0" placeholder="Payment amount" value={salePay.amount} onChange={e=>setSalePay({...salePay,amount:e.target.value})}/>
-          <select className="ad-input" value={salePay.receivedBy} onChange={e=>setSalePay({...salePay,receivedBy:e.target.value})}>
-            <option value="">Received by</option>{PAYERS.map(p=><option key={p}>{p}</option>)}
-          </select>
+          <PersonSelect value={salePay.receivedBy} onChange={(v)=>setSalePay({...salePay,receivedBy:v})} label="Received by" />
           <select className="ad-input" value={salePay.paymentMode} onChange={e=>setSalePay({...salePay,paymentMode:e.target.value})}>
             <option>Cash</option><option>UPI</option><option>Bank Transfer</option><option>Cheque</option>
           </select>
@@ -376,14 +372,12 @@ export default function InventoryPage() {
           <input className="ad-input" type="number" min="0" placeholder="Amount" value={expense.amount} onChange={e=>setExpense({...expense,amount:e.target.value})}/>
           <input className="ad-input" type="date" value={expense.expenseDate} onChange={e=>setExpense({...expense,expenseDate:e.target.value})}/>
           {expense.expenseType==="Electricity" && <><input className="ad-input" type="month" value={expense.billingMonth} onChange={e=>setExpense({...expense,billingMonth:e.target.value})}/><input className="ad-input" type="date" value={expense.billingStartDate} onChange={e=>setExpense({...expense,billingStartDate:e.target.value})} placeholder="Billing start"/><input className="ad-input" type="date" value={expense.billingEndDate} onChange={e=>setExpense({...expense,billingEndDate:e.target.value})} placeholder="Billing end"/></>}
-          <select className="ad-input" value={expense.paidBy} onChange={e=>setExpense({...expense,paidBy:e.target.value})}>
-            <option value="">Paid by</option><option>Rahul</option><option>Devesh</option><option>Nitin</option>
-          </select>
+          <PersonSelect value={expense.paidBy} onChange={(v)=>setExpense({...expense,paidBy:v})} />
           <input className="ad-input" placeholder="Description / notes" value={expense.description} onChange={e=>setExpense({...expense,description:e.target.value})}/>
         </div>
         <button className="ad-btn ad-btn-primary mt-3" onClick={addExpense}>Save Expense</button>
       </div>
-      <div className="ad-table-wrap"><table className="ad-table"><thead><tr><th>Payment Date</th><th>Category</th><th>Billing Period</th><th>Description</th><th>Amount</th><th>Paid by</th></tr></thead><tbody>
+      <div className="ad-table-wrap"><table className="ad-table"><thead><tr><th>Payment Date</th><th>Category</th><th>Billing Period</th><th>Description</th><th>Amount</th><th>Payment done by</th></tr></thead><tbody>
         {(data.otherExpenses||[]).filter((x:any)=>x.mode===mode).map((x:any)=><tr key={x.id}><td>{x.expense_date}</td><td>{x.expense_type}</td><td>{x.expense_type==="Electricity" ? (x.billing_start_date&&x.billing_end_date ? `${x.billing_start_date} → ${x.billing_end_date}` : x.billing_month||"—") : "Expense date month"}</td><td>{x.description||"—"}</td><td>₹{Number(x.amount).toFixed(2)}</td><td>{x.paid_by||"—"}</td></tr>)}
       </tbody></table></div>
     </div>}
