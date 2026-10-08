@@ -33,6 +33,10 @@ export default function InventoryPage() {
   const [editingPurchase,setEditingPurchase] = useState<number|null>(null);
   const [borrowing,setBorrowing] = useState({lenderId:"",amount:"",purpose:"",notes:""});
   const [adjust,setAdjust] = useState({materialId:"",materialName:"",quantityKg:"",amount:"",notes:""});
+  const [creditPay,setCreditPay] = useState<{purchaseId:number; amount:string; paidBy:string} | null>(null);
+  const [salePay,setSalePay] = useState<{saleId:number; amount:string; receivedBy:string; paymentMode:string} | null>(null);
+  const [repayForm,setRepayForm] = useState<{borrowingId:number; amount:string} | null>(null);
+  const PAYERS = ["Rahul","Devesh","Nitin"] as const;
 
   async function load() {
     const r=await fetch("/api/admin/inventory");
@@ -105,9 +109,53 @@ export default function InventoryPage() {
     if(ok) setExpense({expenseType:"Electricity",description:"",amount:"",expenseDate:new Date().toISOString().slice(0,10),billingMonth:new Date().toISOString().slice(0,7),billingStartDate:"",billingEndDate:"",paidBy:""});
   }
 
-  async function receiveSalePayment(s:any) {
-    const v=prompt("Payment amount",String(s.credit_amount));
-    if(v) await post("receiveSalePayment",{mode,saleId:s.id,amount:Number(v),receivedBy:prompt("Received by (Rahul / Devesh / Nitin)")||undefined,paymentMode:prompt("Payment mode","Cash")||"Cash",paymentDate:new Date().toISOString().slice(0,10)});
+  function openSalePayment(s:any) {
+    setSalePay({saleId:s.id, amount:String(s.credit_amount??""), receivedBy:"", paymentMode:"Cash"});
+  }
+
+  async function submitSalePayment() {
+    if(!salePay) return;
+    const amount=Number(salePay.amount);
+    if(!(amount>0)) { setMessage("Enter a valid payment amount"); return; }
+    if(salePay.receivedBy && !PAYERS.includes(salePay.receivedBy as typeof PAYERS[number])) {
+      setMessage("Invalid payer"); return;
+    }
+    const ok=await post("receiveSalePayment",{
+      mode, saleId:salePay.saleId, amount,
+      receivedBy:salePay.receivedBy||undefined,
+      paymentMode:salePay.paymentMode||"Cash",
+      paymentDate:new Date().toISOString().slice(0,10),
+    });
+    if(ok) setSalePay(null);
+  }
+
+  function openCreditPayment(p:Purchase) {
+    setCreditPay({purchaseId:p.id, amount:String(p.credit_amount??""), paidBy:""});
+  }
+
+  async function submitCreditPayment() {
+    if(!creditPay) return;
+    const amount=Number(creditPay.amount);
+    if(!(amount>0)) { setMessage("Enter a valid payment amount"); return; }
+    if(creditPay.paidBy && !PAYERS.includes(creditPay.paidBy as typeof PAYERS[number])) {
+      setMessage("Invalid payer"); return;
+    }
+    const ok=await post("paySupplierCredit",{
+      purchaseId:creditPay.purchaseId, amount, paidBy:creditPay.paidBy||undefined,
+    });
+    if(ok) setCreditPay(null);
+  }
+
+  function openRepayment(b:Borrowing) {
+    setRepayForm({borrowingId:b.id, amount:String(b.outstanding_amount??"")});
+  }
+
+  async function submitRepayment() {
+    if(!repayForm) return;
+    const amount=Number(repayForm.amount);
+    if(!(amount>0)) { setMessage("Enter a valid repayment amount"); return; }
+    const ok=await post("repayBorrowing",{borrowingId:repayForm.borrowingId, amount});
+    if(ok) setRepayForm(null);
   }
 
   async function addPurchase() {
@@ -197,8 +245,20 @@ export default function InventoryPage() {
         </div>
       </div>
 
+      {creditPay && <div className="ad-card p-4 border border-[var(--ad-accent)]">
+        <h3 className="mb-3 text-sm font-semibold">Pay supplier credit — purchase #{creditPay.purchaseId}</h3>
+        <div className="grid gap-2 md:grid-cols-4">
+          <input className="ad-input" type="number" min="0" placeholder="Payment amount" value={creditPay.amount} onChange={e=>setCreditPay({...creditPay,amount:e.target.value})}/>
+          <select className="ad-input" value={creditPay.paidBy} onChange={e=>setCreditPay({...creditPay,paidBy:e.target.value})}>
+            <option value="">Payment done by</option>{PAYERS.map(p=><option key={p}>{p}</option>)}
+          </select>
+          <button className="ad-btn ad-btn-primary" onClick={submitCreditPayment}>Save credit payment</button>
+          <button className="ad-btn ad-btn-ghost" onClick={()=>setCreditPay(null)}>Cancel</button>
+        </div>
+      </div>}
+
       <div className="ad-table-wrap"><table className="ad-table"><thead><tr><th>Date</th><th>Vendor</th><th>Material</th><th>Qty</th><th>Rate</th><th>Vendor Total</th><th>Paid</th><th>Unpaid</th><th>Payment done by</th><th>Status</th><th>Action</th></tr></thead><tbody>
-        {filteredPurchases.map((p:Purchase)=><tr key={p.id}><td>{p.purchase_date}</td><td>{p.supplierName||"—"}</td><td>{p.material_name}</td><td>{p.quantity_kg} kg</td><td>₹{p.rate_per_kg}</td><td>₹{p.total_amount}</td><td>₹{p.paid_amount}</td><td>₹{p.credit_amount}</td><td>{Number(p.paid_amount)>0?p.paid_by||"—":"—"}</td><td>{Number(p.paid_amount)>0?"PAID":"UNPAID"}</td><td><button className="text-xs font-semibold text-[var(--ad-accent)] mr-3" onClick={()=>startEditPurchase(p)}>Edit</button>{p.credit_amount>0&&<button className="text-xs font-semibold text-[var(--ad-accent)]" onClick={async()=>{const v=prompt("Payment amount",String(p.credit_amount));if(!v)return;const paidBy=prompt("Payment done by (Rahul / Devesh / Nitin)")||"";if(paidBy&&!["Rahul","Devesh","Nitin"].includes(paidBy)){setMessage("Invalid payer");return;}await post("paySupplierCredit",{purchaseId:p.id,amount:Number(v),paidBy:paidBy||undefined})}}>Pay credit</button>}</td></tr>)}
+        {filteredPurchases.map((p:Purchase)=><tr key={p.id}><td>{p.purchase_date}</td><td>{p.supplierName||"—"}</td><td>{p.material_name}</td><td>{p.quantity_kg} kg</td><td>₹{p.rate_per_kg}</td><td>₹{p.total_amount}</td><td>₹{p.paid_amount}</td><td>₹{p.credit_amount}</td><td>{Number(p.paid_amount)>0?p.paid_by||"—":"—"}</td><td>{Number(p.paid_amount)>0?"PAID":"UNPAID"}</td><td><button className="text-xs font-semibold text-[var(--ad-accent)] mr-3" onClick={()=>startEditPurchase(p)}>Edit</button>{p.credit_amount>0&&<button className="text-xs font-semibold text-[var(--ad-accent)]" onClick={()=>openCreditPayment(p)}>Pay credit</button>}</td></tr>)}
       </tbody></table></div>
     </div>}
 
@@ -245,8 +305,23 @@ export default function InventoryPage() {
         </div>
         <p className="mt-2 text-xs ad-muted">Processing labour is automatically ₹2/kg for every sale. Loading charges are sale-specific and paid after the sale. GST is intentionally not included for now.</p>
       </div>
+      {salePay && <div className="ad-card p-4 border border-[var(--ad-accent)]">
+        <h3 className="mb-3 text-sm font-semibold">Receive sale payment — sale #{salePay.saleId}</h3>
+        <div className="grid gap-2 md:grid-cols-5">
+          <input className="ad-input" type="number" min="0" placeholder="Payment amount" value={salePay.amount} onChange={e=>setSalePay({...salePay,amount:e.target.value})}/>
+          <select className="ad-input" value={salePay.receivedBy} onChange={e=>setSalePay({...salePay,receivedBy:e.target.value})}>
+            <option value="">Received by</option>{PAYERS.map(p=><option key={p}>{p}</option>)}
+          </select>
+          <select className="ad-input" value={salePay.paymentMode} onChange={e=>setSalePay({...salePay,paymentMode:e.target.value})}>
+            <option>Cash</option><option>UPI</option><option>Bank Transfer</option><option>Cheque</option>
+          </select>
+          <button className="ad-btn ad-btn-primary" onClick={submitSalePayment}>Save payment</button>
+          <button className="ad-btn ad-btn-ghost" onClick={()=>setSalePay(null)}>Cancel</button>
+        </div>
+      </div>}
+
       <div className="ad-table-wrap"><table className="ad-table"><thead><tr><th>Date</th><th>Buyer</th><th>Contact</th><th>Materials</th><th>Total</th><th>Received</th><th>Pending</th><th>Action</th></tr></thead><tbody>
-        {(data.sales||[]).filter((s:any)=>s.mode===mode).map((s:any)=><tr key={s.id}><td>{s.sale_date}</td><td>{s.customer_name}</td><td>{s.phone||"—"}</td><td>{(data.saleItems||[]).filter((x:any)=>x.sale_id===s.id).map((x:any)=>x.material_variant+" "+x.quantity_kg+"kg @ ₹"+x.rate_per_kg).join(" | ")||s.material_variant}</td><td>₹{s.total_amount}</td><td>₹{s.received_amount}</td><td>₹{s.credit_amount}</td><td>{s.credit_amount>0?<button className="text-xs font-semibold text-[var(--ad-accent)] mr-3" onClick={()=>receiveSalePayment(s)}>Receive</button>:<span className="mr-3">PAID</span>}<button className="text-xs font-semibold text-[var(--ad-accent)]" onClick={()=>startEditSale(s)}>Edit</button></td></tr>)}
+        {(data.sales||[]).filter((s:any)=>s.mode===mode).map((s:any)=><tr key={s.id}><td>{s.sale_date}</td><td>{s.customer_name}</td><td>{s.phone||"—"}</td><td>{(data.saleItems||[]).filter((x:any)=>x.sale_id===s.id).map((x:any)=>x.material_variant+" "+x.quantity_kg+"kg @ ₹"+x.rate_per_kg).join(" | ")||s.material_variant}</td><td>₹{s.total_amount}</td><td>₹{s.received_amount}</td><td>₹{s.credit_amount}</td><td>{s.credit_amount>0?<button className="text-xs font-semibold text-[var(--ad-accent)] mr-3" onClick={()=>openSalePayment(s)}>Receive</button>:<span className="mr-3">PAID</span>}<button className="text-xs font-semibold text-[var(--ad-accent)]" onClick={()=>startEditSale(s)}>Edit</button></td></tr>)}
       </tbody></table></div>
     </div>}
     {tab==="inventory" && <div className="space-y-5">
@@ -296,7 +371,16 @@ export default function InventoryPage() {
         <input className="ad-input" placeholder="Purpose" value={borrowing.purpose} onChange={e=>setBorrowing({...borrowing,purpose:e.target.value})}/>
         <button className="ad-btn ad-btn-primary" onClick={addBorrowing}>Add borrowing</button>
       </div></div>
-      <div className="ad-table-wrap"><table className="ad-table"><thead><tr><th>Date</th><th>Lender</th><th>Amount</th><th>Outstanding</th><th>Action</th></tr></thead><tbody>{filteredBorrowings.map((b:Borrowing)=><tr key={b.id}><td>{b.borrowing_date}</td><td>{b.lenderName}</td><td>₹{b.amount}</td><td>₹{b.outstanding_amount}</td><td>{b.outstanding_amount>0&&<button className="text-xs font-semibold text-[var(--ad-accent)]" onClick={async()=>{const v=prompt("Repayment amount",String(b.outstanding_amount));if(v)await post("repayBorrowing",{borrowingId:b.id,amount:Number(v)})}}>Repay</button>}</td></tr>)}</tbody></table></div>
+      {repayForm && <div className="ad-card p-4 border border-[var(--ad-accent)]">
+        <h3 className="mb-3 text-sm font-semibold">Repay borrowing #{repayForm.borrowingId}</h3>
+        <div className="grid gap-2 md:grid-cols-3">
+          <input className="ad-input" type="number" min="0" placeholder="Repayment amount" value={repayForm.amount} onChange={e=>setRepayForm({...repayForm,amount:e.target.value})}/>
+          <button className="ad-btn ad-btn-primary" onClick={submitRepayment}>Save repayment</button>
+          <button className="ad-btn ad-btn-ghost" onClick={()=>setRepayForm(null)}>Cancel</button>
+        </div>
+      </div>}
+
+      <div className="ad-table-wrap"><table className="ad-table"><thead><tr><th>Date</th><th>Lender</th><th>Amount</th><th>Outstanding</th><th>Action</th></tr></thead><tbody>{filteredBorrowings.map((b:Borrowing)=><tr key={b.id}><td>{b.borrowing_date}</td><td>{b.lenderName}</td><td>₹{b.amount}</td><td>₹{b.outstanding_amount}</td><td>{b.outstanding_amount>0&&<button className="text-xs font-semibold text-[var(--ad-accent)]" onClick={()=>openRepayment(b)}>Repay</button>}</td></tr>)}</tbody></table></div>
     </div>}
 
     </div>

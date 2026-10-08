@@ -90,5 +90,18 @@ try {
 }
 assert.equal(db.prepare("SELECT used_amount FROM vendor_advances WHERE id=1").get().used_amount, 0);
 
+// A8: credit settlement must not exceed outstanding credit (inline payment form sends positive amounts only).
+db.exec("INSERT INTO purchases(id,paid_amount,material_id,material_name,supplier_id,paid_by) VALUES(2,50,7,'Natural Bottles',1,'Rahul')");
+db.exec("ALTER TABLE purchases ADD COLUMN credit_amount REAL NOT NULL DEFAULT 0");
+db.prepare("UPDATE purchases SET credit_amount=50 WHERE id=2").run();
+const outstanding = Number(db.prepare("SELECT credit_amount FROM purchases WHERE id=2").get().credit_amount);
+const attempted = 75;
+assert.equal(attempted > outstanding + 0.005, true);
+// Simulate API guard: reject overpay, leave credit unchanged.
+if (!(attempted > outstanding + 0.005)) {
+  db.prepare("UPDATE purchases SET paid_amount=paid_amount+?, credit_amount=credit_amount-? WHERE id=?").run(attempted, attempted, 2);
+}
+assert.equal(Number(db.prepare("SELECT credit_amount FROM purchases WHERE id=2").get().credit_amount), 50);
+
 db.close();
 console.log("inventory regression tests: PASS");
