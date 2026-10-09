@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { BirthdayJourney } from "@/components/BirthdayJourney";
 
-export default function HomePage() {
-  redirect("/admin/login");
+export default function Home() {
+  return <BirthdayJourney />;
 }

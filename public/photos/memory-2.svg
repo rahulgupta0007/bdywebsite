@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <defs>
+    <linearGradient id="g" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fae8ff"/>
+      <stop offset="50%" stop-color="#fce7f3"/>
+      <stop offset="100%" stop-color="#fff1f2"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="1000" fill="url(#g)"/>
+  <circle cx="280" cy="380" r="90" fill="#fda4af" opacity="0.4"/>
+  <circle cx="520" cy="420" r="110" fill="#c4b5fd" opacity="0.35"/>
+  <circle cx="400" cy="560" r="100" fill="#fb7185" opacity="0.3"/>
+  <text x="400" y="860" text-anchor="middle" font-family="Georgia, serif" font-size="36" fill="#701a75" opacity="0.65">A Soft Memory</text>
+</svg>

@@ -1,50 +1,52 @@
 import type { Metadata } from "next";
-import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import {
+  Cormorant_Garamond,
+  Great_Vibes,
+  Outfit,
+  Patrick_Hand,
+} from "next/font/google";
 import "./globals.css";
-import { LocaleProvider } from "@/components/locale-provider";
-import { BusinessModeProvider } from "@/components/business-mode-provider";
-import { ThemeProvider } from "@/components/theme-provider";
 
-const inter = Inter({
+const display = Cormorant_Garamond({
   subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-display",
 });
 
-const jakarta = Plus_Jakarta_Sans({
+const script = Great_Vibes({
   subsets: ["latin"],
-  variable: "--font-jakarta",
-  display: "swap",
+  weight: ["400"],
+  variable: "--font-script",
 });
 
-const businessName = process.env.NEXT_PUBLIC_BUSINESS_NAME || "NAVRIT";
-const tagline =
-  process.env.NEXT_PUBLIC_BUSINESS_TAGLINE || "Turning Waste into Value.";
+const hand = Patrick_Hand({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-hand",
+});
+
+const body = Outfit({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600"],
+  variable: "--font-body",
+});
 
 export const metadata: Metadata = {
-  title: {
-    default: `${businessName} | Management Portal`,
-    template: `%s | ${businessName}`,
-  },
-  description: tagline,
-  openGraph: {
-    title: businessName,
-    description: tagline,
-    type: "website",
-  },
+  title: "A Birthday Surprise ❤️",
+  description: "A personalized romantic birthday journey made just for you.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html lang="en" className={`${inter.variable} ${jakarta.variable}`} suppressHydrationWarning>
-      <body className="min-h-screen antialiased">
-        <ThemeProvider>
-          <LocaleProvider>
-            <BusinessModeProvider>
-              {children}
-            </BusinessModeProvider>
-          </LocaleProvider>
-        </ThemeProvider>
+    <html lang="en">
+      <body
+        className={`${display.variable} ${script.variable} ${hand.variable} ${body.variable} antialiased`}
+      >
+        {children}
       </body>
     </html>
   );

@@ -1,12 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Fewer parallel page-data workers → fewer SQLite open races on platforms like Railway
-  experimental: {
-    cpus: 1,
+  images: {
+    // Local blob: URLs and same-origin public assets
+    unoptimized: true,
   },
-  output: "standalone",
-  serverExternalPackages: [],
 };
 
 export default nextConfig;
