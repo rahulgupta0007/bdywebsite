@@ -98,11 +98,8 @@ export function BirthdayInvite() {
   useEffect(() => {
     if (!catchRunning || secondsLeft <= 0) return;
     const timer = window.setTimeout(() => {
-      setSecondsLeft((s) => {
-        const next = s - 1;
-        if (next <= 0) setCatchRunning(false);
-        return Math.max(0, next);
-      });
+      setSecondsLeft((s) => Math.max(0, s - 1));
+      if (secondsLeft <= 1) setCatchRunning(false);
     }, 1000);
     return () => window.clearTimeout(timer);
   }, [catchRunning, secondsLeft]);
@@ -274,6 +271,26 @@ export function BirthdayInvite() {
           <div className="game-controls"><button className="button button-soft" type="button" onClick={restart}>↻ Restart game</button></div>
           <p className="game-hint">✦ Hint: matching cards have the same little picture.</p>
         </section>
+
+        {gameSolved && !inviteOpen && (
+          <section className="unlocked-invite panel" aria-labelledby="unlocked-invite-title">
+            <div className="unlocked-bow" aria-hidden="true">🎉　♡　🎀</div>
+            <span className="pill">INVITATION UNLOCKED</span>
+            <h2 id="unlocked-invite-title">You're invited, birthday bestie!</h2>
+            <p>Come celebrate with Ishika at</p>
+            <h3 className="venue-name">Meekos Rooftop<br />Cafe &amp; Taverna</h3>
+            <div className="event-details">
+              <div className="event-detail"><span className="detail-icon" aria-hidden="true">📅</span><div><span className="detail-label">WHEN</span><strong>Wednesday, 14 October 2026</strong></div></div>
+              <div className="event-detail"><span className="detail-icon" aria-hidden="true">🕓</span><div><span className="detail-label">TIME</span><strong>4:00 PM</strong></div></div>
+            </div>
+            <div className="surprise-actions">
+              <a className="button button-primary" href="https://www.google.com/maps/search/?api=1&query=Meekos+Rooftop+Cafe+%26+Taverna" target="_blank" rel="noopener noreferrer">Get directions ↗</a>
+              <button className="button button-soft" type="button" onClick={shareInvite}>Share invite ♡</button>
+              <button className="button button-soft" type="button" onClick={() => setInviteOpen(true)}>View invitation again</button>
+            </div>
+            <p className="share-status" role="status" aria-live="polite">{shareMessage}</p>
+          </section>
+        )}
 
         <section className="bonus-section" id="bonus-games" aria-labelledby="bonus-title">
           <div className="section-heading bonus-heading">
