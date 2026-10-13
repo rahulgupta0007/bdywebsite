@@ -1,13 +1,18 @@
 # Ishika's Birthday Invitation 💗
 
-A responsive birthday invitation for Ishika, built with Next.js, TypeScript, and CSS. Guests match three pairs in a memory game to reveal the party venue and time.
+A responsive birthday invitation for Ishika, built with Next.js, TypeScript, and CSS. Guests unlock the venue by completing a memory-match game, then can enjoy two bonus mini-games.
 
 ## Party details
 - **Venue:** Meekos Rooftop Cafe & Taverna
 - **Date:** Wednesday, 14 October 2026
 - **Time:** 4:00 PM
 
-Update the copy in `src/components/BirthdayInvite.tsx` if the event details change.
+Update the invitation copy in `src/components/BirthdayInvite.tsx` if any event details change.
+
+## Games
+1. **Memory match:** match three pairs; completing the game immediately opens the animated invitation modal.
+2. **Catch the hearts:** tap the moving heart to catch ten within ten seconds.
+3. **Birthday bestie quiz:** answer three lighthearted multiple-choice questions to get your score.
 
 ## Run locally
 ```bash
@@ -35,6 +40,6 @@ The app listens on Render's `PORT` environment variable (fallback port 4321).
 ## Features
 - Responsive layout for phones, tablets, and desktop
 - Floating heart animations and reduced-motion support
-- Shuffled 3-pair memory matching game
-- Live move and pair counters, restart button, and surprise reveal
-- Google Maps directions and share/copy invitation action
+- Centred animated party invitation that opens immediately after the main game
+- Venue, date/time, Google Maps directions, and share/copy invitation action
+- Two optional bonus games after the reveal
