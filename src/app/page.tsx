@@ -1,5 +1,5 @@
-import { BirthdayJourney } from "@/components/BirthdayJourney";
+import { BirthdayInvite } from "@/components/BirthdayInvite";
 
 export default function Home() {
-  return <BirthdayJourney />;
+  return <BirthdayInvite />;
 }
