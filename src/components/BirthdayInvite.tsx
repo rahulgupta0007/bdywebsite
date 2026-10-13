@@ -96,19 +96,14 @@ export function BirthdayInvite() {
 
   useEffect(() => {
     if (gameStatus !== "playing") return;
-    const timer = window.setInterval(() => {
-      setTimeLeft((remaining) => {
-        if (remaining <= 1) {
-          window.clearInterval(timer);
-          setGameStatus((current) => current === "won" ? "won" : "lost");
-          setMessage((current) => current === "won" ? current : "Time is up! Your surprise is still locked. Try again!");
-          return 0;
-        }
-        return remaining - 1;
-      });
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [gameStatus]);
+    if (timeLeft <= 0) {
+      setGameStatus("lost");
+      setMessage("Time is up! Your surprise is still locked. Try again!");
+      return;
+    }
+    const timer = window.setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [gameStatus, timeLeft]);
 
   useEffect(() => {
     if (gameStatus !== "playing") return;
