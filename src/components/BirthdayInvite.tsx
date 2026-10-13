@@ -96,12 +96,14 @@ export function BirthdayInvite() {
   }, [inviteOpen]);
 
   useEffect(() => {
-    if (!catchRunning) return;
-    if (secondsLeft <= 0) {
-      setCatchRunning(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
+    if (!catchRunning || secondsLeft <= 0) return;
+    const timer = window.setTimeout(() => {
+      setSecondsLeft((s) => {
+        const next = s - 1;
+        if (next <= 0) setCatchRunning(false);
+        return Math.max(0, next);
+      });
+    }, 1000);
     return () => window.clearTimeout(timer);
   }, [catchRunning, secondsLeft]);
 
