@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 type GameStatus = "ready" | "playing" | "won" | "lost";
 type TargetKind = "heart" | "gold" | "broken";
-type CatchTarget = { id: string; kind: TargetKind; x: number; y: number };
+type CatchTarget = { id: string; slot: number; kind: TargetKind; x: number; y: number };
 type BonusCard = { id: number; icon: string };
 
 const WIN_SCORE = 18;
@@ -17,12 +17,12 @@ const QUIZ = [
 ];
 
 const INITIAL_TARGETS: CatchTarget[] = [
-  { id: "init-1", kind: "heart", x: 16, y: 28 },
-  { id: "init-2", kind: "heart", x: 50, y: 30 },
-  { id: "init-3", kind: "gold", x: 84, y: 28 },
-  { id: "init-4", kind: "broken", x: 16, y: 70 },
-  { id: "init-5", kind: "heart", x: 50, y: 70 },
-  { id: "init-6", kind: "heart", x: 84, y: 69 },
+  { id: "init-1", slot: 0, kind: "heart", x: 16, y: 28 },
+  { id: "init-2", slot: 1, kind: "heart", x: 50, y: 30 },
+  { id: "init-3", slot: 2, kind: "gold", x: 84, y: 28 },
+  { id: "init-4", slot: 3, kind: "broken", x: 16, y: 70 },
+  { id: "init-5", slot: 4, kind: "heart", x: 50, y: 70 },
+  { id: "init-6", slot: 5, kind: "heart", x: 84, y: 69 },
 ];
 
 function makeTargets(): CatchTarget[] {
@@ -37,6 +37,7 @@ function makeTargets(): CatchTarget[] {
   }
   return spots.map((spot, i) => ({
     id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+    slot: i,
     kind: kinds[i],
     x: Math.max(12, Math.min(88, spot.x + (Math.random() * 12 - 6))),
     y: Math.max(20, Math.min(78, spot.y + (Math.random() * 14 - 7))),
@@ -63,6 +64,7 @@ export function BirthdayInvite() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
   const caughtIds = useRef<Set<string>>(new Set());
+  const gameStatusRef = useRef<GameStatus>("ready");
   const gameAreaRef = useRef<HTMLDivElement>(null);
 
   // Bonus game one: find three matching pairs, available only after winning the main game.
@@ -89,6 +91,7 @@ export function BirthdayInvite() {
     setBestStreak(0);
     setMessage("Go go go! Tap pink hearts; golden hearts are worth 3!");
     setTargets(makeTargets());
+    gameStatusRef.current = "playing";
     setGameStatus("playing");
     setInviteOpen(false);
     setShareMessage("");
@@ -96,12 +99,18 @@ export function BirthdayInvite() {
 
   useEffect(() => {
     if (gameStatus !== "playing") return;
-    if (timeLeft <= 0) {
-      setGameStatus("lost");
-      setMessage("Time is up! Your surprise is still locked. Try again!");
-      return;
-    }
-    const timer = window.setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+    const timer = window.setTimeout(() => {
+      if (timeLeft <= 1) {
+        setTimeLeft(0);
+        if (gameStatusRef.current === "playing") {
+          gameStatusRef.current = "lost";
+          setGameStatus("lost");
+          setMessage("Time is up! Your surprise is still locked. Try again!");
+        }
+      } else {
+        setTimeLeft(timeLeft - 1);
+      }
+    }, 1000);
     return () => window.clearTimeout(timer);
   }, [gameStatus, timeLeft]);
 
@@ -174,6 +183,7 @@ export function BirthdayInvite() {
 
     if (nextScore >= WIN_SCORE) {
       setScore(nextScore);
+      gameStatusRef.current = "won";
       setGameStatus("won");
       setMessage("You won! Your birthday surprise is ready! ♡");
       setInviteOpen(true);
@@ -303,8 +313,8 @@ export function BirthdayInvite() {
             {gameStatus === "lost" && <div className="arena-message"><span className="arena-big-emoji">🥺</span><strong>So close!</strong><p>You scored {score} points. Your surprise is still locked — try again!</p></div>}
             {gameStatus === "won" && <div className="arena-message"><span className="arena-big-emoji">🎉</span><strong>You unlocked it!</strong><p>Your birthday invitation is ready!</p></div>}
             {(gameStatus === "playing" ? targets : []).map((target) => (
-              <button key={target.id} type="button"
-                className={`flying-target target-${target.kind}`}
+              <button type="button"
+                key={target.slot} className={`flying-target target-${target.kind}`}
                 style={{ left: target.x + "%", top: target.y + "%" }}
                 onClick={() => catchTarget(target)}
                 aria-label={target.kind === "broken" ? "Broken heart, minus two points" : target.kind === "gold" ? "Golden bonus heart, plus three points" : "Catch pink heart, plus one point"}>
