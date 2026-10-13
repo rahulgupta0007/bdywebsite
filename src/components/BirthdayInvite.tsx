@@ -62,12 +62,11 @@ export function BirthdayInvite() {
   const [message, setMessage] = useState("Ready to catch some love?");
   const [inviteOpen, setInviteOpen] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
-  const [soundOn, setSoundOn] = useState(true);
   const caughtIds = useRef<Set<string>>(new Set());
   const gameAreaRef = useRef<HTMLDivElement>(null);
 
   // Bonus game one: find three matching pairs, available only after winning the main game.
-  const [bonusDeck, setBonusDeck] = useState<BonusCard[]>([]);
+  const [bonusDeck, setBonusDeck] = useState<BonusCard[]>(() => makeBonusDeck());
   const [bonusFlipped, setBonusFlipped] = useState<number[]>([]);
   const [bonusMatched, setBonusMatched] = useState<number[]>([]);
   const [bonusMoves, setBonusMoves] = useState(0);
@@ -323,7 +322,7 @@ export function BirthdayInvite() {
           {gameStatus === "playing" && <button className="button button-soft catch-start" type="button" onClick={startGame}>Restart round ↻</button>}
           {gameStatus === "lost" && <button className="button button-primary catch-start" type="button" onClick={startGame}>Try again — I’ve got this! ♡</button>}
           {gameStatus === "won" && <button className="button button-primary catch-start" type="button" onClick={() => setInviteOpen(true)}>Open my invitation 🎀</button>}
-          <p className="catch-footnote">Pro tip: golden hearts give you a boost. Watch out for the broken ones! ✨</p>
+          <p className="catch-footnote">Best streak: <strong>{bestStreak}</strong> hearts · Golden hearts give a boost, broken hearts cost points! ✨</p>
         </section>
 
         {won && !inviteOpen && (
