@@ -79,3 +79,14 @@ h1{color:var(--pink-deep);font:500 clamp(3.4rem,9.3vw,6.25rem)/.99 var(--font-di
 .quiz-result .quiz-question{color:var(--pink-deep);font-size:1.05rem}
 @media(max-width:650px){.bonus-grid{grid-template-columns:1fr}.bonus-card{padding:24px 20px}.catch-arena{height:170px}.invite-overlay{padding:10px}.invite-modal{max-height:94dvh;border-radius:25px;padding:32px 19px 25px}.modal-close{top:8px;right:8px;width:34px;height:34px}.modal-confetti{margin-top:3px;margin-bottom:13px}.invite-modal .venue-name{margin-bottom:15px}.invite-modal .event-details{flex-direction:column;max-width:330px;margin:0 auto}.invite-modal .event-detail{width:100%}.invite-modal .surprise-actions{flex-direction:column}.invite-modal .surprise-actions .button{width:100%;max-width:310px}.bonus-link{margin-top:10px}}
 @media(prefers-reduced-motion:reduce){.invite-overlay,.invite-modal,.modal-confetti,.moving-heart{animation:none!important}}
+
+
+/* Persistent invitation card remains on the page after the pop-up is dismissed. */
+.unlocked-invite{margin-top:22px;padding:clamp(25px,5vw,46px);text-align:center;background:linear-gradient(145deg,rgba(255,255,255,.98),rgba(255,228,239,.96));border-color:#fff}
+.unlocked-bow{font-size:1.55rem;letter-spacing:.04em;margin-bottom:10px;animation:confetti-bob 2s ease-in-out infinite}
+.unlocked-invite h2{color:var(--pink-deep);font:500 clamp(2rem,5.5vw,3.2rem)/1.1 var(--font-display),Georgia,serif;letter-spacing:-.04em;margin:15px 0 8px}
+.unlocked-invite>p:not(.share-status){color:var(--muted);margin:8px auto}
+.unlocked-invite .venue-name{margin:10px 0 20px}
+.unlocked-invite .event-details{margin:0 auto 20px}
+.unlocked-invite .surprise-actions{gap:9px}
+@media(max-width:560px){.unlocked-invite{padding:28px 16px}.unlocked-invite .event-details{flex-direction:column;max-width:330px;margin:0 auto 18px}.unlocked-invite .event-detail{width:100%}.unlocked-invite .surprise-actions{flex-direction:column}.unlocked-invite .surprise-actions .button{width:100%;max-width:310px}}
