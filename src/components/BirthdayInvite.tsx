@@ -33,14 +33,22 @@ const QUIZ = [
 ];
 
 export function BirthdayInvite() {
-  const [deck, setDeck] = useState<Card[]>([]);
+  const [deck, setDeck] = useState<Card[]>(() => [
+    { icon: "🍓", id: 0 }, { icon: "🎀", id: 1 }, { icon: "🎂", id: 2 },
+    { icon: "🎀", id: 3 }, { icon: "🍓", id: 4 }, { icon: "🎂", id: 5 },
+  ]);
   const [flipped, setFlipped] = useState<number[]>([]);
   const [matched, setMatched] = useState<number[]>([]);
   const [moves, setMoves] = useState(0);
   const [locked, setLocked] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
-  const [hearts, setHearts] = useState<{ left: number; delay: number; duration: number; icon: string }[]>([]);
+  const hearts = Array.from({ length: 20 }, (_, i) => ({
+    left: (i * 37 + 11) % 100,
+    delay: -((i * 1.7) % 18),
+    duration: 12 + (i % 8) * 1.5,
+    icon: ["♡", "♥", "✦", "୨୧"][i % 4],
+  }));
   const timerRef = useRef<number | null>(null);
 
   // Bonus game: collect as many hearts as possible in 10 seconds.
@@ -54,13 +62,6 @@ export function BirthdayInvite() {
   const [quizChoice, setQuizChoice] = useState<number | null>(null);
   const [quizScore, setQuizScore] = useState(0);
   const [quizDone, setQuizDone] = useState(false);
-
-  const clearPendingTimer = () => {
-    if (timerRef.current !== null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  };
 
   const restart = useCallback(() => {
     if (timerRef.current !== null) {
@@ -76,18 +77,23 @@ export function BirthdayInvite() {
     setShareMessage("");
   }, []);
 
+  useEffect(() => () => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+  }, []);
+
   useEffect(() => {
-    restart();
-    setHearts(Array.from({ length: 20 }, (_, i) => ({
-      left: (i * 37 + 11) % 100,
-      delay: -((i * 1.7) % 18),
-      duration: 12 + (i % 8) * 1.5,
-      icon: ["♡", "♥", "✦", "୨୧"][i % 4],
-    })));
-    return () => {
-      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    if (!inviteOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setInviteOpen(false);
     };
-  }, [restart]);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [inviteOpen]);
 
   useEffect(() => {
     if (!catchRunning) return;
